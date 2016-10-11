@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 #include "prodcons.h"
 
@@ -23,18 +24,39 @@
  * which have to be retrieved by consumers
  */
 static ITEM   buffer [BUFFER_SIZE];
+pthread_mutex_t bufferMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
+
 
 static void rsleep (int t);
+
+
 
 /* producer thread */
 static void * producer (void * arg)
 {
     ITEM    item;   // a produced item
+    int itemsProduced = 1;
     
-    while (1/* TODO: not all items produced */)
+    while (itemsProduced < NROF_ITEMS)/*TODO: not all items produced*/
     {
         rsleep (PRODUCER_SLEEP_FACTOR);
         
+        int randomDestination = (rand() % NROF_CONSUMERS) + 1;
+        itemsProduced <<= NROF_BITS_DEST;
+        item = itemsProduced & randomDestination;
+        itemsProduced++;
+
+        pthread_mutex_lock(&bufferMutex);
+        printf("thread: enter CS\n");
+
+        while(){
+        	printf("thread: wait...\n");
+        	pthread_cond_wait(&condition, &bufferMutex);
+        }
+        printf("thread:signalled\n");
+        printf("thread: leave CS\n");
+        pthread_mutex_unlock(&bufferMutex);
         // TODO: 
         // * produce new item and put it into buffer[]
         //
