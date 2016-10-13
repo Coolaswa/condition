@@ -25,8 +25,9 @@
  */
 static ITEM   buffer [BUFFER_SIZE];
 pthread_mutex_t bufferMutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
-
+static pthread_cond_t prodCondition = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t conCondition/*[NROF_CONSUMERS]*/ = PTHREAD_COND_INITIALIZER;
+int bufferCounter = 0;
 
 static void rsleep (int t);
 
@@ -42,21 +43,32 @@ static void * producer (void * arg)
     {
         rsleep (PRODUCER_SLEEP_FACTOR);
         
-        int randomDestination = (rand() % NROF_CONSUMERS) + 1;
-        itemsProduced <<= NROF_BITS_DEST;
-        item = itemsProduced & randomDestination;
-        itemsProduced++;
 
-        pthread_mutex_lock(&bufferMutex);
-        printf("thread: enter CS\n");
 
-        while(){
-        	printf("thread: wait...\n");
-        	pthread_cond_wait(&condition, &bufferMutex);
-        }
-        printf("thread:signalled\n");
-        printf("thread: leave CS\n");
-        pthread_mutex_unlock(&bufferMutex);
+       	if(bufferCounter >= BUFFER_SIZE){
+
+       	} else {
+            pthread_mutex_lock(&bufferMutex);
+            //printf("thread: enter CS\n");
+           	pthread_cond_wait(&prodCondition, &bufferMutex);
+            //printf("thread:signalled\n");
+            //fill buffer
+       		int i;
+       		for(i = 0; i < BUFFER_SIZE; i++){
+            	int randomDestination = (rand() % NROF_CONSUMERS) + 1;
+            	itemsProduced <<= NROF_BITS_DEST;
+            	item = itemsProduced & randomDestination;
+            	itemsProduced++;
+            	buffer[i] = item;
+            	printf("%04x\n", item); // write info to stdout
+       		}
+       		bufferCounter = 0;
+            //end buffer
+           	//TODO: which consumer?
+           	pthread_cond_signal(&conCondition);
+            //printf("thread: leave CS\n");
+            pthread_mutex_unlock(&bufferMutex);
+       	}
         // TODO: 
         // * produce new item and put it into buffer[]
         //
@@ -74,7 +86,6 @@ static void * producer (void * arg)
         // (see condition_test() in condition_basics.c how to use condition variables)
 
         // apply this printf at the correct location in that pseudocode:
-        printf("%04x\n", item); // write info to stdout
     }
     
     // TODO: 
@@ -85,12 +96,25 @@ static void * producer (void * arg)
 static void * consumer (void * arg)
 {
     ITEM    item;   // a consumed item
-    int     id;     // identifier of this consumer (value 0..NROF_CONSUMERS-1)
+    int     id = *((int*)arg);     // identifier of this consumer (value 0..NROF_CONSUMERS-1)
     
     while (1/* TODO: not all items retrieved for this customer */)
     {
         rsleep (100 * NROF_CONSUMERS);
 
+        pthread_mutex_lock(&bufferMutex);
+        pthread_cond_wait(&conCondition, &bufferMutex);
+        if (bufferCounter < BUFFER_SIZE){
+        	item = buffer[bufferCounter];
+        	buffer[bufferCounter] = 0;
+        	bufferCounter++;
+        } else {
+        	//signal producer
+        	pthread_cond_signal(&prodCondition);
+        }
+
+
+        pthread_mutex_unlock(&bufferMutex);
         // TODO: get the next item from buffer[] (intended for this customer)
         //
         // follow this pseudocode (according to the ConditionSynchronization lecture):
@@ -112,7 +136,8 @@ int main (void)
     // * startup the producer thread and the consumer threads
     // * wait until all threads are finished  
     // (see assignment Threaded Application how to create threads and how to wait for them)
-    
+
+
     return (0);
 }
 
