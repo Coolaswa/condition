@@ -39,25 +39,21 @@ static void * producer (void * arg)
     ITEM    item;   // a produced item
     int itemsProduced = 1;
     
-    while (itemsProduced < NROF_ITEMS)/*TODO: not all items produced*/
+    while (itemsProduced < NROF_ITEMS)
     {
         rsleep (PRODUCER_SLEEP_FACTOR);
-        
 
-
-       	if(bufferCounter >= BUFFER_SIZE){
-
-       	} else {
+       	if(bufferCounter >= BUFFER_SIZE) {
             pthread_mutex_lock(&bufferMutex);
-            //printf("thread: enter CS\n");
+            printf("Producer waiting for condition\n");
            	pthread_cond_wait(&prodCondition, &bufferMutex);
-            //printf("thread:signalled\n");
+            printf("Producer started to fill buffer\n");
             //fill buffer
        		int i;
        		for(i = 0; i < BUFFER_SIZE; i++){
             	int randomDestination = (rand() % NROF_CONSUMERS) + 1;
-            	itemsProduced <<= NROF_BITS_DEST;
-            	item = itemsProduced & randomDestination;
+            	int itemShift = itemsProduced << NROF_BITS_DEST;
+            	item = itemShift | randomDestination;
             	itemsProduced++;
             	buffer[i] = item;
             	printf("%04x\n", item); // write info to stdout
@@ -65,9 +61,13 @@ static void * producer (void * arg)
        		bufferCounter = 0;
             //end buffer
            	//TODO: which consumer?
-           	pthread_cond_signal(&conCondition);
             //printf("thread: leave CS\n");
             pthread_mutex_unlock(&bufferMutex);
+       		/*for(i = 0; i < BUFFER_SIZE; i++){
+       			pthread_cond_signal(&conCondition); //Before or after the lock? Thats the question
+       		}*/
+       	} else {
+       		pthread_cond_signal(&conCondition);
        	}
         // TODO: 
         // * produce new item and put it into buffer[]
@@ -87,9 +87,10 @@ static void * producer (void * arg)
 
         // apply this printf at the correct location in that pseudocode:
     }
-    
+    printf("Producer done\n");
     // TODO: 
     // * inform consumers that we're ready
+    return(NULL);
 }
 
 /* consumer thread */
@@ -98,23 +99,23 @@ static void * consumer (void * arg)
     ITEM    item;   // a consumed item
     int     id = *((int*)arg);     // identifier of this consumer (value 0..NROF_CONSUMERS-1)
     
-    while (1/* TODO: not all items retrieved for this customer */)
+    while (1)
     {
         rsleep (100 * NROF_CONSUMERS);
-
-        pthread_mutex_lock(&bufferMutex);
-        pthread_cond_wait(&conCondition, &bufferMutex);
-        if (bufferCounter < BUFFER_SIZE){
+        if(bufferCounter >= BUFFER_SIZE){
+        	pthread_cond_signal(&prodCondition);
+        } else {
+        	pthread_mutex_lock(&bufferMutex);
+        	printf("Consumer achieved successful lock and is waiting for the condition\n");
+        	pthread_cond_wait(&conCondition, &bufferMutex); //What is the signal it needs to wait for?
+        	printf("Consumer started to empty buffer\n");
         	item = buffer[bufferCounter];
         	buffer[bufferCounter] = 0;
         	bufferCounter++;
-        } else {
-        	//signal producer
-        	pthread_cond_signal(&prodCondition);
+        	pthread_mutex_unlock(&bufferMutex);
         }
 
 
-        pthread_mutex_unlock(&bufferMutex);
         // TODO: get the next item from buffer[] (intended for this customer)
         //
         // follow this pseudocode (according to the ConditionSynchronization lecture):
@@ -128,6 +129,7 @@ static void * consumer (void * arg)
         // apply this printf at the correct location in that pseudocode:
         printf("%*s    C%d:%04x\n", 7*id, "", id, item); // write info to stdout (with indentation)
     }
+    return(NULL);
 }
 
 int main (void)
@@ -136,8 +138,24 @@ int main (void)
     // * startup the producer thread and the consumer threads
     // * wait until all threads are finished  
     // (see assignment Threaded Application how to create threads and how to wait for them)
-
-
+	pthread_t producer_id, consumer_id;
+	int con_id = 1;
+	int newThread = pthread_create(&producer_id, NULL, producer, NULL);
+	if(newThread == -1){
+		perror("Creating the producer thread failed");
+		exit(1);
+	}
+	printf("Producer created\n");
+	newThread = pthread_create(&consumer_id, NULL, consumer, &con_id);
+	if(newThread == -1){
+		perror("Creating a consumer thread failed");
+		exit(1);
+	}
+	printf("Consumer created\n");
+	sleep(1);
+	pthread_cond_signal(&prodCondition);
+	pthread_join(producer_id, NULL);
+	pthread_join(consumer_id, NULL);
     return (0);
 }
 
