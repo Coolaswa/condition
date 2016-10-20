@@ -16,6 +16,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "prodcons.h"
 
@@ -38,13 +40,17 @@ static void * producer (void * arg)
 {
     ITEM    item;   // a produced item
     int itemsProduced = 1;
-    bool bufferEmpty = TRUE;
+    bool bufferEmpty = true;
 	
-    while (itemsProduced < NROF_ITEMS || bufferEmpty == TRUE)
+    while (itemsProduced < NROF_ITEMS || !bufferEmpty)
     {
         rsleep (PRODUCER_SLEEP_FACTOR);
-
-       	if(bufferEmpty == TRUE) {
+        if(buffer[BUFFER_SIZE - 1] == 0){
+        	bufferEmpty = true;
+        } else {
+        	bufferEmpty = false;
+        }
+       	if(bufferEmpty && itemsProduced < NROF_ITEMS) {
             pthread_mutex_lock(&bufferMutex);
             printf("Producer waiting for condition\n");
            	pthread_cond_wait(&prodCondition, &bufferMutex);
@@ -60,7 +66,7 @@ static void * producer (void * arg)
             	printf("%04x\n", item); // write info to stdout
        		}
        		bufferCounter = 0;
-		bufferEmpty=FALSE;
+       		bufferEmpty = false;
             //end buffer
            	//TODO: which consumer?
             //printf("thread: leave CS\n");
@@ -69,15 +75,13 @@ static void * producer (void * arg)
        			pthread_cond_signal(&conCondition); //Before or after the lock? Thats the question
        		}*/
        	} else {
+       		int i;
 			for(i = 0; i < BUFFER_SIZE; i++){
-				if buffer[i] = 0 {
-					//Nothing, go to next item in buffer[]
-				}
-				else {
+				if (buffer[i] != 0) {
 					pthread_cond_signal(&conCondition);
+					break;
 				}
 			}
-			bufferEmpty = TRUE;
        	}
         // TODO: 
         // * produce new item and put it into buffer[]
@@ -117,11 +121,12 @@ static void * consumer (void * arg)
         } else {
         	pthread_mutex_lock(&bufferMutex);
         	printf("Consumer achieved successful lock and is waiting for the condition\n");
-        	pthread_cond_wait(&conCondition, &bufferMutex); //What is the signal it needs to wait for?
-        	printf("Consumer started to empty buffer\n");
+        	pthread_cond_wait(&conCondition, &bufferMutex);
+        	printf("Consumer taking one item from the buffer\n");
         	item = buffer[bufferCounter];
         	buffer[bufferCounter] = 0;
         	bufferCounter++;
+        	printf("%*s    C%d:%04x\n", 7*id, "", id, item); // write info to stdout (with indentation)
         	pthread_mutex_unlock(&bufferMutex);
         }
 
@@ -137,8 +142,8 @@ static void * consumer (void * arg)
         //      mutex-unlock;
 
         // apply this printf at the correct location in that pseudocode:
-        printf("%*s    C%d:%04x\n", 7*id, "", id, item); // write info to stdout (with indentation)
     }
+    printf("Consumer %d done\n", id);
     return(NULL);
 }
 
@@ -162,7 +167,7 @@ int main (void)
 		exit(1);
 	}
 	printf("Consumer created\n");
-	sleep(1);
+	sleep(2);
 	pthread_cond_signal(&prodCondition);
 	pthread_join(producer_id, NULL);
 	pthread_join(consumer_id, NULL);
