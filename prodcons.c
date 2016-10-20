@@ -38,12 +38,13 @@ static void * producer (void * arg)
 {
     ITEM    item;   // a produced item
     int itemsProduced = 1;
-    
-    while (itemsProduced < NROF_ITEMS)
+    bool bufferEmpty = TRUE;
+	
+    while (itemsProduced < NROF_ITEMS || bufferEmpty == TRUE)
     {
         rsleep (PRODUCER_SLEEP_FACTOR);
 
-       	if(bufferCounter >= BUFFER_SIZE) {
+       	if(bufferEmpty == TRUE) {
             pthread_mutex_lock(&bufferMutex);
             printf("Producer waiting for condition\n");
            	pthread_cond_wait(&prodCondition, &bufferMutex);
@@ -59,6 +60,7 @@ static void * producer (void * arg)
             	printf("%04x\n", item); // write info to stdout
        		}
        		bufferCounter = 0;
+		bufferEmpty=FALSE;
             //end buffer
            	//TODO: which consumer?
             //printf("thread: leave CS\n");
@@ -67,7 +69,15 @@ static void * producer (void * arg)
        			pthread_cond_signal(&conCondition); //Before or after the lock? Thats the question
        		}*/
        	} else {
-       		pthread_cond_signal(&conCondition);
+			for(i = 0; i < BUFFER_SIZE; i++){
+				if buffer[i] = 0 {
+					//Nothing, go to next item in buffer[]
+				}
+				else {
+					pthread_cond_signal(&conCondition);
+				}
+			}
+			bufferEmpty = TRUE;
        	}
         // TODO: 
         // * produce new item and put it into buffer[]
