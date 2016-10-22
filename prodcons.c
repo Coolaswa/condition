@@ -2,8 +2,8 @@
  * Operating Systems   (2INCO)   Practical Assignment
  * Condition Variables Application
  *
- * STUDENT_NAME_1 (STUDENT_NR_1)
- * STUDENT_NAME_2 (STUDENT_NR_2)
+ * Michiel Favier (0951737)
+ * Diederik de Wit (0829667)
  *
  * Grading:
  * Students who hand in clean code that fully satisfies the minimum requirements will get an 8. 
@@ -28,7 +28,7 @@
 static ITEM   buffer [BUFFER_SIZE];
 pthread_mutex_t bufferMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t prodCondition = PTHREAD_COND_INITIALIZER;
-static pthread_cond_t conCondition/*[NROF_CONSUMERS]*/ = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t conCondition/*TODO: [NROF_CONSUMERS]*/ = PTHREAD_COND_INITIALIZER;
 int bufferCounter = 0;
 
 static void rsleep (int t);
@@ -39,7 +39,7 @@ static void rsleep (int t);
 static void * producer (void * arg)
 {
     ITEM    item;   // a produced item
-    int itemsProduced = 1;
+    int itemsProduced = 1; //The item which is going to be produced next. TODO: Klopt dit?
     bool bufferEmpty = true;
 	
     while (itemsProduced < NROF_ITEMS || !bufferEmpty)
@@ -50,10 +50,11 @@ static void * producer (void * arg)
         } else {
         	bufferEmpty = false;
         }
+	    //If the buffer is empty and not all items have been produced yet, fill the buffer.
        	if(bufferEmpty && itemsProduced < NROF_ITEMS) {
             pthread_mutex_lock(&bufferMutex);
             printf("Producer waiting for condition\n");
-           	pthread_cond_wait(&prodCondition, &bufferMutex);
+		pthread_cond_wait(&prodCondition, &bufferMutex);
             printf("Producer started to fill buffer\n");
             //fill buffer
        		int i;
@@ -78,7 +79,10 @@ static void * producer (void * arg)
        		int i;
 			for(i = 0; i < BUFFER_SIZE; i++){
 				if (buffer[i] != 0) {
-					pthread_cond_signal(&conCondition);
+					//TODO: Signal correct consumer here.
+					//Get the the last NROF_BITS_DEST from buffer[i]
+					//Save this to X
+					pthread_cond_signal(&conCondition/*[X]*/);
 					break;
 				}
 			}
@@ -110,13 +114,41 @@ static void * producer (void * arg)
 /* consumer thread */
 static void * consumer (void * arg)
 {
+	int itemsConsumed = 1;
     ITEM    item;   // a consumed item
     int     id = *((int*)arg);     // identifier of this consumer (value 0..NROF_CONSUMERS-1)
     
-    while (1)
+    while (itemsCondumed < NROF_ITEMS)
     {
         rsleep (100 * NROF_CONSUMERS);
-        if(bufferCounter >= BUFFER_SIZE){
+        
+	    //TODO: Please check this new consumer loop
+	    for (i = 0; i < BUFFER_SIZE; i++)
+	    {
+		    if (buffer[i] != 0) //We could include some check to make sure the consumer takes the right item.
+		    {
+			    pthread_mutex_lock(&bufferMutex);
+			    printf("Consumer achieved successful lock and is waiting for the condition\n");
+			    pthread_cond_wait(&conCondition, &bufferMutex);
+			    printf("Consumer taking one item from the buffer\n");
+			    item = buffer[i];
+			    buffer[i] = 0;
+			    itemsConsumed++;
+			    printf("%*s    C%d:%04x\n", 7*id, "", id, item); // write info to stdout (with indentation)
+			    pthread_mutex_unlock(&bufferMutex);
+			    break; //This break should be here right?
+		    }
+		    else if (i == BUFFER_SIZE && buffer[BUFFER_SIZE] == 0)
+		    {
+			    pthread_cond_signal(&prodCondition)
+		    }
+		    else //This else statement will be entered every time that (buffer[i]=0) && (i != BUFFER_SIZE)
+		    {
+			    //Just fluff for now
+		    }
+	    }
+	    /*Oude loop voor single consumer met global variabele bufferCounter
+	    if(bufferCounter >= BUFFER_SIZE){
         	pthread_cond_signal(&prodCondition);
         } else {
         	pthread_mutex_lock(&bufferMutex);
@@ -128,7 +160,7 @@ static void * consumer (void * arg)
         	bufferCounter++;
         	printf("%*s    C%d:%04x\n", 7*id, "", id, item); // write info to stdout (with indentation)
         	pthread_mutex_unlock(&bufferMutex);
-        }
+        }*/
 
 
         // TODO: get the next item from buffer[] (intended for this customer)
