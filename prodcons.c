@@ -118,7 +118,7 @@ static void * consumer (void * arg)
     ITEM    item;   // a consumed item
     int     id = *((int*)arg);     // identifier of this consumer (value 0..NROF_CONSUMERS-1)
     
-    while (itemsCondumed < NROF_ITEMS)
+    while (itemsConsumed < NROF_ITEMS)
     {
         rsleep (100 * NROF_CONSUMERS);
         
