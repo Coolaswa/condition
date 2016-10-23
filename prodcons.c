@@ -30,7 +30,6 @@ static void * producer (void * arg)
 {
     ITEM    item;   //A produced item.
     int itemsProduced = 1; //The item which is going to be produced next. 
-	//TODO: itemsProduced: This is actually itemToBeProduced. 
     bool bufferEmpty = true; //A boolean which signifies whether the buffer is empty or not.
 	
 	/*
@@ -138,7 +137,7 @@ static void * consumer (void * arg)
 				//Increment the counter which keeps track of how many items have been consumed.
 		    	itemsConsumed++;
 		    	printf("%*s    C%d:%04x\n", 7*id, "", id, item); // write info to stdout (with indentation)
-				//Signal the producer.
+				//Check the next item to see if it also belongs to this consumer
 		    	if(((buffer[i + 1] & ((unsigned short int)~0 >> (16-NROF_BITS_DEST))) == id) && i + 1 < BUFFER_SIZE){
 		    		printf("The next item also belongs to me!\n");
 		    		continue;
