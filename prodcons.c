@@ -29,8 +29,8 @@ static ITEM   buffer [BUFFER_SIZE];
 pthread_mutex_t bufferMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t prodCondition = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t conCondition[NROF_CONSUMERS];
+static pthread_cond_t readyCondition;
 pthread_cond_t placeHolder = PTHREAD_COND_INITIALIZER;
-int bufferCounter = 0;
 
 static void rsleep (int t);
 
@@ -66,21 +66,21 @@ static void * producer (void * arg)
             	buffer[i] = item;
             	printf("%04x\n", item); // write info to stdout
        		}
-       		bufferCounter = 0;
        		bufferEmpty = false;
             //end buffer
-           	//TODO: which consumer?
-            //printf("thread: leave CS\n");
-
-       		/*for(i = 0; i < BUFFER_SIZE; i++){
-       			pthread_cond_signal(&conCondition); //Before or after the lock? Thats the question
-       		}*/
        	} else {
        		int i;
+       		unsigned short int dest;
+       		bool first = true;
 			for(i = 0; i < BUFFER_SIZE; i++){
 				if (buffer[i] != 0) {
 					ITEM locItem = buffer[i];
-					unsigned short int dest = locItem & ((unsigned short int)~0 >> (16-NROF_BITS_DEST));
+					if(!first){
+						printf("Waiting on previous thread to be ready\n");
+						pthread_cond_wait(&readyCondition, &bufferMutex);
+					}
+					first = false;
+					dest = locItem & ((unsigned short int)~0 >> (16-NROF_BITS_DEST));
 					pthread_cond_signal(&conCondition[dest]); //TODO: The producer might signal before the consumers are ready
 					printf("Just signaled consumer %d\n", dest);
 					pthread_cond_wait(&prodCondition, &bufferMutex);
@@ -110,31 +110,33 @@ static void * consumer (void * arg)
         
 	    //TODO: Please check this new consumer loop
         int i;
+        pthread_mutex_lock(&bufferMutex);
+       	printf("Consumer %d achieved successful lock and is waiting for the condition\n", id);
+       	pthread_cond_signal(&readyCondition);
+       	printf("Signaled the producer we're ready\n");
+    	pthread_cond_wait(&conCondition[id], &bufferMutex);
 	    for (i = 0; i <= BUFFER_SIZE; i++)
 	    {
-	    	pthread_mutex_lock(&bufferMutex);
-	    	printf("Consumer %d achieved successful lock and is waiting for the condition\n", id);
-	    	pthread_cond_wait(&conCondition[id], &bufferMutex);
 		   	if (buffer[i] != 0) //We could include some check to make sure the consumer takes the right item.
 		   	{
-
 		    	printf("Consumer %d taking one item from the buffer\n", id);
 		    	item = buffer[i];
 		    	buffer[i] = 0;
 		    	itemsConsumed++;
 		    	printf("%*s    C%d:%04x\n", 7*id, "", id, item); // write info to stdout (with indentation)
 		    	pthread_cond_signal(&prodCondition);
+		    	break;
 		   	}
 		   	else if (i == BUFFER_SIZE && buffer[BUFFER_SIZE] == 0)
 		   	{
 		    	pthread_cond_signal(&prodCondition);
 		   	}
-		   	else //This else statement will be entered every time that (buffer[i]=0) && (i != BUFFER_SIZE)
+		   	else //This else statement will be entered every time that (buffer[i]==0) && (i != BUFFER_SIZE)
 		   	{
 		    	//Just fluff for now
 		   	}
-		   	pthread_mutex_unlock(&bufferMutex);
 	    }
+	    pthread_mutex_unlock(&bufferMutex);
     }
     printf("Consumer %d done\n", id);
     return(NULL);
